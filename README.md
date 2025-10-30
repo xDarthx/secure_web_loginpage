@@ -1,6 +1,6 @@
-## Secure Login/Sign Up page
+# Secure Login/Sign Up page
 
-# About The Website
+## About The Website
 This page was a cybersecurity project where I was tasked to create some type of application that 
 has a secure sign up and log in section. All personal info is encrypted and all passwords are hashed with a salt. 
 
