@@ -64,110 +64,17 @@ const UserIcon = ({ className = "w-6 h-6" }) => (
   </svg>
 );
 
-const arrayBufferToBase64 = (buffer) => {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return window.btoa(binary);
-};
-
-const base64ToArrayBuffer = (base64) => {
-  const binary_string = window.atob(base64);
-  const len = binary_string.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binary_string.charCodeAt(i);
-  }
-  return bytes.buffer;
-};
-
-const deriveKey = async (password, salt) => {
-  const enc = new TextEncoder();
-  const importedPassword = await window.crypto.subtle.importKey(
-    'raw',
-    enc.encode(password),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveKey']
-  );
-
-  return window.crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: salt,
-      iterations: 100000,
-      hash: 'SHA-256',
-    },
-    importedPassword,
-    {name: 'AES-GCM', length: 256 },
-    true,
-    ['encrypt', 'decrypt']
-  );
-};
-
-const encryptData = async (key, dataString) => {
-  const enc = new TextEncoder();
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const encryptedData = await window.crypto.subtle.encrypt(
-    {
-      name: 'AES-GCM',
-      iv: iv,
-    },
-    key,
-    enc.encode(dataString)
-  );
-
-  return {
-    iv: arrayBufferToBase64(iv),
-    encryptedData: arrayBufferToBase64(encryptedData),
-  };
-};
-
-const decryptData = async (key, iv_base64, encryptedData_base64) => {
-  const iv = base64ToArrayBuffer(iv_base64);
-  const encryptedData = base64ToArrayBuffer(encryptedData_base64);
-
-  try {
-    const decrypted = await window.crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: iv,
-      },
-      key,
-      encryptedData
-    );
-
-    const dec = new TextDecoder();
-    return dec.decode(decrypted);
-  } catch (e) {
-    console.error('Decryption failed', e);
-    throw new Error('Could not decrypt data. Wrong password?');
-  }
-};
-
-const DB_KEY = 'userDatabase';
-
-const loadUserDatabase = () => {
-  try {
-    const dbString = window.localStorage.getItem(DB_KEY);
-    return dbString ? JSON.parse(dbString) : [];
-  } catch (e) {
-    console.error('Could not load user database:', e);
-    return [];
-  }
-};
-
-const saveUserDatabase = (database) => {
-  try {
-    const dbString = JSON.stringify(database);
-    window.localStorage.setItem(DB_KEY, dbString);
-  } catch (e) {
-    console.error('Could not save user database:', e);
-  }
-};
+/** 
+ * QR Code Icon
+*/
+const QrCodeIcon = ({ className = "w-6 h-6" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="3" y="3" width="7" height="7"></rect>
+    <rect x="14" y="3" width="7" height="7"></rect>
+    <rect x="14" y="14" width="7" height="7"></rect>
+    <rect x="3" y="14" width="7" height="7"></rect>
+  </svg>
+);
 
 const FormInput = ({ id, type, placeholder, icon, value, onChange}) => (
   <div className='relative flex items-center'>
@@ -213,7 +120,150 @@ const MessageDisplay = ({ type, message, children }) => {
   );
 };
 
-const LoginForm = ({ onSwitchToSignUp, setGlobalMessage, setGlobalError }) => {
+/** 
+ * FORGOT PASSWORD FORM
+*/
+const ForgotPasswordForm = ({ onSwitchToLogin, setGlobalMessage, setGlobalError}) => {
+  const [step, setStep] = useState(1);
+  const [email, setEmail] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [qrImage, setQrImage] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+
+  const handleEmailSubmit = async (e) => {
+    e.preventDefault();
+    setGlobalError('');
+    setGlobalMessage('Generating security QR code...');
+
+    try{
+      const qrResponse = await axios.get(`http://localhost:8081/mfa/qr/${email}`);
+      
+      setQrImage(qrResponse.data);
+      setStep(2);
+      setGlobalMessage('Please scan the QR code to verify identity.');
+    } catch (err) {
+      console.error(err);
+      setGlobalError('Could not generate QR code. Check email format.');
+    }
+  };
+
+  const handleMfaVerify = async (e) => {
+    e.preventDefault();
+    setGlobalError('');
+
+    try {
+      const response = await axios.post('http://localhost:8081/mfa/verify', {
+        id: email,
+        code: mfaCode
+      });
+
+      if (response.data === true || response.data === "TRUE") {
+        setStep(3);
+        setGlobalMessage('Identity Verified. Please enter new password.');
+      } else {
+        setGlobalError('Invalid code. Please try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      setGlobalError('Verification failed.');
+    }
+  };
+
+  const handlePasswordReset = async (e) => {
+    e.preventDefault();
+    setGlobalError(''); 
+
+    try{
+      const response = await axios.post('http://localhost:8081/reset-password', {
+        email: email,
+        newPassword: newPassword
+      });
+      setGlobalMessage(response.data.message);
+
+      setTimeout(() => {
+        onSwitchToLogin();
+      }, 2000);
+    } catch (err) {
+      console.error(err);
+      setGlobalError('Failed to update password.');
+    }
+  };
+
+  return (
+    <div className='w-full max-w-md space-y-6 rounded-2xl bg-white p-8 shadow-xl md:p-10'>
+      <h2 className="text-center text-3xl font-bold text-gray-900">Reset Password</h2>
+
+      {/* STEP 1: Email Input */}
+      {step === 1 && (
+        <form onSubmit={handleEmailSubmit} className="space-y-6">
+          <p className="text-center text-gray-500">Enter your email to begin the recovery process.</p>
+          <FormInput
+            id="email"
+            type="email"
+            placeholder="Email address"
+            icon={<MailIcon className="h-5 w-5" />}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+          <button type="submit" className='w-full rounded-lg bg-blue-600 py-3 text-base font-semibold text-white shadow-md hover:bg-blue-700'>
+            Next
+          </button>
+        </form>
+      )}
+
+      {/* STEP 2: MFA Verification */}
+      {step === 2 && (
+        <form onSubmit={handleMfaVerify} className="space-y-6">
+           <p className="text-center text-sm text-gray-500">
+            Scan this with your Authenticator App and enter the code to prove it's you.
+          </p>
+          <div className="flex justify-center my-4">
+            {qrImage && (
+              <img src={qrImage} alt="QR Code" className="border-4 border-gray-200 rounded-lg"/>
+            )}
+          </div>
+          <FormInput
+            id="mfaCode"
+            type="text"
+            placeholder="Authenticator Code"
+            icon={<QrCodeIcon className="h-5 w-5" />}
+            value={mfaCode}
+            onChange={(e) => setMfaCode(e.target.value)}
+          />
+          <button type="submit" className='w-full rounded-lg bg-green-600 py-3 text-base font-semibold text-white shadow-md hover:bg-green-700'>
+            Verify Identity
+          </button>
+        </form>
+      )}
+
+      {/* STEP 3: New Password */}
+      {step === 3 && (
+        <form onSubmit={handlePasswordReset} className="space-y-6">
+          <p className="text-center text-gray-500">Enter your new password.</p>
+          <FormInput
+            id="newPassword"
+            type="password"
+            placeholder="New Password"
+            icon={<LockIcon className="h-5 w-5" />}
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+          <button type="submit" className='w-full rounded-lg bg-blue-600 py-3 text-base font-semibold text-white shadow-md hover:bg-blue-700'>
+            Update Password
+          </button>
+        </form>
+      )}
+
+      <div className='text-center'>
+        <button onClick={onSwitchToLogin} className='text-sm font-medium text-gray-600 hover:text-gray-900 hover:underline'>
+          Back to Login
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const LoginForm = ({ onSwitchToSignUp, onSwitchToForgot, setGlobalMessage, setGlobalError }) => {
   const [email,setEmail] = useState('');
   const [password, setPassword] = useState('');
 
@@ -222,38 +272,24 @@ const LoginForm = ({ onSwitchToSignUp, setGlobalMessage, setGlobalError }) => {
     setGlobalMessage('');
     setGlobalError('');
 
-    /*
-    axios.post('')
-    */
-
-    const userDatabase = loadUserDatabase();
-    if (userDatabase.length === 0) {
-      setGlobalError('No users found. Please sign up first.');
-      return;
-    }
-
-    const user = userDatabase.find((u) => u.email === email);
-    if (!user) {
-      setGlobalError('Invalid email or password.'); // Be vague for security
-      return;
-    }
-
     try {
-      const salt = base64ToArrayBuffer(user.salt);
+      const response = await axios.post('http://localhost:8081/login', {
+        email,
+        password
+      });
 
-      const key = await deriveKey(password, salt);
+      setGlobalMessage(`Welcome back, ${response.data.fullName}!`);
+      setPassword('');
 
-      const decryptedFullName = await decryptData(
-        key,
-        user.encryptedData.iv,
-        user.encryptedData.encryptedData
-      );
-      setGlobalMessage(`Welcome back, ${decryptedFullName}!`);
     } catch (error) {
       console.error('Login attempt failed:', error);
-      setGlobalError('Invalid email or password.');
+
+      if(error.response && error.response.data && error.response.data.error) {
+        setGlobalError(error.response.data.error);
+      } else {
+        setGlobalError('Login failed. Please check your server connection.');
+      }
     }
-    setPassword('');
   };
 
   return (
@@ -282,7 +318,7 @@ const LoginForm = ({ onSwitchToSignUp, setGlobalMessage, setGlobalError }) => {
         />
 
         <div className='text-right'>
-          <a href="#" className='text-sm font-medium text-blue-600 hover:text-blue-500 hover:underline'>
+          <a onClick={onSwitchToForgot} className='text-sm font-medium text-blue-600 hover:text-blue-500 hover:underline'>
             Forgot password?
           </a>
         </div>
@@ -313,37 +349,27 @@ const SignUpForm = ({ onSwitchToLogin, setGlobalMessage, setGlobalError }) => {
     setGlobalError('');
 
     try {
-      const userDatabase = loadUserDatabase();
+      const response = await axios.post('http://localhost:8081/register', {
+        fullName,
+        email,
+        password
+      });
 
-      const existingUser = userDatabase.find((u) => u.email === email);
-      if (existingUser) {
-        setGlobalError('An account with this email already exists.');
-        return;
-      }
-
-      const salt = window.crypto.getRandomValues(new Uint8Array(16));
-
-      const key = await deriveKey(password, salt);
-
-      const encryptedData = await encryptData(key, fullName);
-
-      const user = {
-        email: email,
-        salt: arrayBufferToBase64(salt),
-        encryptedData: encryptedData,
-      };
-
-      const newDatabase = [...userDatabase, user];
-      saveUserDatabase(newDatabase);
-
-      setGlobalMessage('Account created! You can now log in.');
+      setGlobalMessage(response.data.message || 'Account created! You can now log in.');
 
       setFullName('');
       setEmail('');
       setPassword('');
+
+      //onSwitchToLogin();
+
     } catch (err) {
       console.error('Failed to sign up:', err);
-      setGlobalError('An error occurred during sign up. See console.');
+      if(err.response && err.response.data && err.response.data.error) {
+        setGlobalError(err.response.data.error);
+      } else {
+        setGlobalError('An error occurred during sign up. Is the server running?');
+      }
     }
   };
 
@@ -407,6 +433,12 @@ function App() {
     setGlobalError('');
   };
 
+  const switchToForgot = () => {
+    setView('forgot');
+    setGlobalMessage('');
+    setGlobalError('');
+  };
+
   const switchToSignUp = () => {
     setView('signup');
     setGlobalMessage('');
@@ -420,14 +452,25 @@ function App() {
         <MessageDisplay type="error" message={globalError} />
       </div>
 
-      {view === 'login' ? (
+      {view === 'login' && (
         <LoginForm
           onSwitchToSignUp={switchToSignUp}
+          onSwitchToForgot={switchToForgot}
           setGlobalMessage={setGlobalMessage}
           setGlobalError={setGlobalError}
         />
-      ) : (
+      )} 
+      {
+        view === 'signup' && (
         <SignUpForm
+          onSwitchToLogin={switchToLogin}
+          setGlobalMessage={setGlobalMessage}
+          setGlobalError={setGlobalError}
+        />
+      )}
+      {
+        view === 'forgot' && (
+        <ForgotPasswordForm
           onSwitchToLogin={switchToLogin}
           setGlobalMessage={setGlobalMessage}
           setGlobalError={setGlobalError}
