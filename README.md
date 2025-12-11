@@ -1,9 +1,17 @@
 # Secure Login App with MFA
+## About This Project
 
-This is the full stack using react, and js for the frontend; for the backend, it is using node.js/express api; the database that I used it phpmyadmin sql.
-Overall, the entire stack is used to create a fluent, secure login page that includes MFA to reset passwords. There are a few things you need to do to get the project up and running.
-Please do keep in mind that all the CSS was done by gemini, and gemini was used to help with the Node.js server.
+This application was developed as a cybersecurity project to demonstrate secure authentication. The goal was to build a full-stack application with a robust sign-up and log-in system. Security was the top priority: all personal information is encrypted, and passwords are secured using hashing and salting.
 
+### Tech Stack
+* **Frontend:** React & JavaScript
+* **Backend:** Node.js with Express API
+* **Database:** MySQL (managed via phpMyAdmin)
+
+### Key Features
+The application delivers a fluid and secure user experience, featuring **Multi-Factor Authentication (MFA)** via Google Authenticator for password resets.
+
+> **Note:** AI assistance (Google Gemini) was utilized for CSS styling and as a coding partner for the Node.js server implementation.
 ## Prerequisites
 
 Before running this project, ensure you have the following installed:
